@@ -1,0 +1,50 @@
+name: Rust
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # Runs every day at midnight UTC
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        BUILD_TARGET: [release]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Clone tdf repo
+        run: |
+          git clone https://github.com/itsjunetime/tdf
+
+      - name: Build binaries in ${{ matrix.BUILD_TARGET }} mode
+        run: |
+          cd tdf
+          cargo build --profile ${{ matrix.BUILD_TARGET }}
+
+      - name: Get current commit hash
+        id: get_commit
+        run: |
+          cd tdf
+          echo "COMMIT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+          echo "COMMIT_MESSAGE=$(git log -1 --pretty=%B)" >> $GITHUB_ENV
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ env.COMMIT_HASH }}
+          name: "Release based on ${{ env.COMMIT_HASH }}"
+          body: "${{ env.COMMIT_MESSAGE }}"
+          files: tdf/target/${{ matrix.BUILD_TARGET }}/tdf
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
