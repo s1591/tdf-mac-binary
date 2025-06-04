@@ -1,0 +1,54 @@
+name: tdf-mac
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # Runs every day at midnight UTC
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        BUILD_TARGET: [release]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Clone tdf repo
+        run: |
+          git clone https://github.com/itsjunetime/tdf
+
+      - name: Build binaries in ${{ matrix.BUILD_TARGET }} mode
+        run: |
+          cd tdf
+          cargo build --profile ${{ matrix.BUILD_TARGET }}
+
+      - name: Get current commit hash and message
+        id: get_commit
+        run: |
+          cd tdf
+          echo "commit_hash=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "commit_message<<EOF" >> $GITHUB_OUTPUT
+          git log -1 --pretty=%B >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.get_commit.outputs.commit_hash }}
+          name: "Release based on ${{ steps.get_commit.outputs.commit_hash }}"
+          body: "${{ steps.get_commit.outputs.commit_message }}"
+          files: tdf/target/${{ matrix.BUILD_TARGET }}/tdf
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
